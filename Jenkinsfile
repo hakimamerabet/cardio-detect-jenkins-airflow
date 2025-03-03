@@ -13,7 +13,7 @@ pipeline {
             steps {
                 script {
                     // Build the Docker image using the Dockerfile
-                    sh 'docker build -t ml-pipeline-image .'
+                    bat 'docker build -t ml-pipeline-image .'
                 }
             }
         }
@@ -40,9 +40,9 @@ pipeline {
                     }
 
                     // Run a temporary Docker container and pass env variables securely via --env-file
-                    sh '''
-                    docker run --rm --env-file env.list \
-                    ml-pipeline-image \
+                    bat '''
+                    docker run --rm --env-file env.list ^
+                    ml-pipeline-image ^
                     bash -c "pytest --maxfail=1 --disable-warnings"
                     '''
                 }
@@ -53,7 +53,7 @@ pipeline {
     post {
         always {
             // Clean up workspace and remove dangling Docker images
-            sh 'docker system prune -f'
+            bat 'docker system prune -f'
         }
         success {
             echo 'Pipeline completed successfully!'
