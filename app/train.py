@@ -30,7 +30,8 @@ def load_data_from_s3(bucket_name, key):
     data = obj['Body'].read().decode('utf-8')
     
     # Read the data into a pandas DataFrame
-    df = pd.read_csv(StringIO(data))
+    df = pd.read_csv(StringIO(data), sep=';')
+    
     return df
 
 # Preprocess data
@@ -48,7 +49,7 @@ def preprocess_data(df):
     df = df.dropna()
 
     # Drop ID column
-    #df = df.drop(columns=["id"])
+    df = df.drop(columns=["id"])
 
     # Drop duplicates
     df = df.drop_duplicates()
