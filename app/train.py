@@ -36,22 +36,59 @@ def load_data_from_s3(bucket_name, key):
 # Preprocess data
 def preprocess_data(df):
     """
-    Split the dataframe into X (features) and y (target).
+    Perform data cleaning and preprocessing.
 
     Args:
         df (pd.DataFrame): Input dataframe.
 
     Returns:
-        tuple: Split data (X_train, X_test, y_train, y_test).
+        tuple: Preprocessed data (X_train, X_test, y_train, y_test).
     """
+    # Delete rows with missing values
+    df = df.dropna()
+
+    # Drop ID column
+    df = df.drop(columns=["id"])
+
+    # Drop duplicates
+    df = df.drop_duplicates()
+
+    # Transform height to meters
+    df['height'] = df['height'].apply(lambda x: x / 100)
+
+    # Remove heights and weights that fall below 2.5% or above 97.5% of a given range
+    df.drop(df[(df['height'] > df['height'].quantile(0.975)) | (df['height'] < df['height'].quantile(0.025))].index, inplace=True)
+    df.drop(df[(df['weight'] > df['weight'].quantile(0.975)) | (df['weight'] < df['weight'].quantile(0.025))].index, inplace=True)
+
+    # Remove negative numbers in blood pressure
+    df = df[(df['ap_hi'] >= 0) & (df['ap_lo'] >= 30)]
+
+    # Remove records where diastolic pressure is higher than systolic pressure
+    df = df[df['ap_lo'] < df['ap_hi']]
+
+    # Calculate BMI
+    df['bmi'] = round(df['weight'] / (df['height'] ** 2), 2)
+
+    # Drop weight and height columns
+    df = df.drop(columns=['height', 'weight'])
+
+    # Convert age to years if needed
+    if df["age"].mean() > 100:
+        df["age"] = (df["age"] / 365).round()
+
+    # Modify gender: 1 -> 0, 2 -> 1
+    df["gender"] = df["gender"].replace({1: 0, 2: 1})
+
+    # Split the dataframe into X (features) and y (target)
     X = df.drop(columns=["cardio"])
     y = df["cardio"]
+    
     return train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
 # Create the pipeline
 def create_pipeline():
     # Preprocessing
-    # Categorial variables pipeline
+    # Categorical variables pipeline
     categorical_features = ['gluc', 'cholesterol']
     categorical_transformer = Pipeline(
         steps=[('encoder', OneHotEncoder(drop='first'))]  # OneHotEncoder for categorical features
