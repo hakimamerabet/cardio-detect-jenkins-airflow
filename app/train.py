@@ -48,7 +48,7 @@ def preprocess_data(df):
     df = df.dropna()
 
     # Drop ID column
-    df = df.drop(columns=["id"])
+    #df = df.drop(columns=["id"])
 
     # Drop duplicates
     df = df.drop_duplicates()
