@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import mlflow
 import time
+import boto3
+from io import StringIO
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.ensemble import RandomForestClassifier
@@ -9,18 +11,27 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from mlflow.models.signature import infer_signature
 
-# Load data
-def load_data(url):
+# Load data from S3
+def load_data_from_s3(bucket_name, key):
     """
-    Load dataset from the given URL.
+    Load dataset from the given S3 bucket.
 
     Args:
-        url (str): URL to the CSV file.
+        bucket_name (str): The name of the S3 bucket.
+        key (str): The S3 key (file path in the bucket).
 
     Returns:
         pd.DataFrame: Loaded dataset.
     """
-    return pd.read_csv(url)
+    s3_client = boto3.client('s3')
+
+    # Download the file from S3 into memory
+    obj = s3_client.get_object(Bucket=bucket_name, Key=key)
+    data = obj['Body'].read().decode('utf-8')
+    
+    # Read the data into a pandas DataFrame
+    df = pd.read_csv(StringIO(data))
+    return df
 
 # Preprocess data
 def preprocess_data(df):
@@ -43,35 +54,28 @@ def create_pipeline():
     # Categorial variables pipeline
     categorical_features = ['gluc', 'cholesterol']
     categorical_transformer = Pipeline(
-        steps=[
-        ('encoder', OneHotEncoder(drop='first')) # on encode les catégories sous forme de colonnes comportant des 0 et des 1
-    ])
+        steps=[('encoder', OneHotEncoder(drop='first'))]  # OneHotEncoder for categorical features
+    )
 
     # Quantitative variables pipeline
     numeric_features = ['age', 'ap_hi', 'ap_lo', 'bmi']
     numeric_transformer = Pipeline(
-        steps=[
-        ('scaler', StandardScaler()) # pour normaliser les variables
-    ]) 
+        steps=[('scaler', StandardScaler())]  # StandardScaler for numeric features
+    )
 
     # Pipelines combination
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', numeric_transformer, numeric_features),
             ('cat', categorical_transformer, categorical_features)
-    ])
+        ]
+    )
 
-
-    """
-    Create a machine learning pipeline with StandardScaler and RandomForestRegressor.
-
-    Returns:
-        Pipeline: A scikit-learn pipeline object.
-    """
+    # Machine learning pipeline with RandomForestClassifier
     return Pipeline(steps=[
         ("Preprocessing", preprocessor),
         ("Random_Forest", RandomForestClassifier()) 
-          ])
+    ])
 
 # Train model
 def train_model(pipe, X_train, y_train, param_grid, cv=2, n_jobs=-1, verbose=3):
@@ -117,13 +121,14 @@ def log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path
     )
 
 # Main function to execute the workflow
-def run_experiment(experiment_name, data_url, param_grid, artifact_path, registered_model_name):
+def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path, registered_model_name):
     """
     Run the entire ML experiment pipeline.
 
     Args:
         experiment_name (str): Name of the MLflow experiment.
-        data_url (str): URL to load the dataset.
+        bucket_name (str): S3 bucket name where the dataset is stored.
+        key (str): S3 key (file path in the bucket).
         param_grid (dict): The hyperparameter grid for GridSearchCV.
         artifact_path (str): Path to store the model artifact.
         registered_model_name (str): Name to register the model under in MLflow.
@@ -132,7 +137,7 @@ def run_experiment(experiment_name, data_url, param_grid, artifact_path, registe
     start_time = time.time()
 
     # Load and preprocess data
-    df = load_data(data_url)
+    df = load_data_from_s3(bucket_name, key)
     X_train, X_test, y_train, y_test = preprocess_data(df)
 
     # Create pipeline
@@ -158,8 +163,9 @@ def run_experiment(experiment_name, data_url, param_grid, artifact_path, registe
 if __name__ == "__main__":
     # Define experiment parameters
     experiment_name = "cardio-detect"
-    data_url = "https://projet-cardiodetect.s3.eu-west-3.amazonaws.com/cardio_train.csv"
-    
+    bucket_name = "projet-cardiodetect" 
+    key = "cardio_train.csv"
+
     param_grid = {
         "Random_Forest__max_depth": [2, 4, 6, 8, 10],
         "Random_Forest__min_samples_leaf": [1, 2, 5],
@@ -170,4 +176,4 @@ if __name__ == "__main__":
     registered_model_name = "random_forest"
 
     # Run the experiment
-    run_experiment(experiment_name, data_url, param_grid, artifact_path, registered_model_name)
+    run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path, registered_model_name)
