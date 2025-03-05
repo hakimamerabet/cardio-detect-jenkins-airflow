@@ -1,0 +1,17 @@
+name: Trigger Airflow DAG
+
+on:
+  push:
+    branches:
+      - main  # Change this to your target branch
+
+jobs:
+  trigger_airflow_dag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send POST request to Airflow API
+        run: |
+          curl -X POST "https://hakimamerabet-cardio-detect-airflow.hf.space/api/v1/dags/jenkins_ec2_ml_training_dag/dagRuns" \
+          -H "Content-Type: application/json" \
+          -H "Authorization: Bearer ${{ secrets.AIRFLOW_API_TOKEN }}" \
+          --data '{"conf": {}}'
