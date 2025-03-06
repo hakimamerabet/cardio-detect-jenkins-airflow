@@ -23,3 +23,4 @@ jobs:
           AIRFLOW_URL: ${{ secrets.AIRFLOW_URL }}
           AIRFLOW_USERNAME: ${{ secrets.AIRFLOW_USERNAME }}
           AIRFLOW_PASSWORD: ${{ secrets.AIRFLOW_PASSWORD }}
+          
