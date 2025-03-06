@@ -3,15 +3,23 @@ name: Trigger Airflow DAG
 on:
   push:
     branches:
-      - main  # Change this to your target branch
+      - main  # Trigger the workflow on push to the main branch
 
 jobs:
-  trigger_airflow_dag:
+  trigger-dag:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Send POST request to Airflow API
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Trigger Airflow DAG
         run: |
-          curl -X POST "https://hakimamerabet-cardio-detect-airflow.hf.space/api/v1/dags/jenkins_ec2_ml_training_dag/dagRuns" \
+          curl -X POST ${{ secrets.AIRFLOW_URL }}/api/v1/dags/jenkins_ec2_ml_training_dag/dagRuns \
+          -u ${{ secrets.AIRFLOW_USERNAME }}:${{ secrets.AIRFLOW_PASSWORD }} \
           -H "Content-Type: application/json" \
-          -H "Authorization: Bearer ${{ secrets.AIRFLOW_API_TOKEN }}" \
-          --data '{"conf": {}}'
+          -d '{"conf": {}, "dag_run_id": "manual_trigger_${{ github.run_id }}"}'
+        env:
+          AIRFLOW_URL: ${{ secrets.AIRFLOW_URL }}
+          AIRFLOW_USERNAME: ${{ secrets.AIRFLOW_USERNAME }}
+          AIRFLOW_PASSWORD: ${{ secrets.AIRFLOW_PASSWORD }}
