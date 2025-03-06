@@ -18,7 +18,14 @@ jobs:
           curl -X POST ${{ secrets.AIRFLOW_URL }}/api/v1/dags/jenkins_ec2_ml_training_dag/dagRuns \
           -u ${{ secrets.AIRFLOW_USERNAME }}:${{ secrets.AIRFLOW_PASSWORD }} \
           -H "Content-Type: application/json" \
-          -d '{"conf": {}, "dag_run_id": "manual_trigger_${{ github.run_id }}"}'
+          -d '{
+            "conf": {},
+            "dag_run_id": "manual_trigger_${{ github.run_id }}",
+            "data_interval_end": "${{ env.datetime }}",
+            "data_interval_start": "${{ env.datetime }}",
+            "logical_date": "${{ env.datetime }}",
+            "note": "Manual trigger from GitHub Actions"
+          }'
         env:
           AIRFLOW_URL: ${{ secrets.AIRFLOW_URL }}
           AIRFLOW_USERNAME: ${{ secrets.AIRFLOW_USERNAME }}
