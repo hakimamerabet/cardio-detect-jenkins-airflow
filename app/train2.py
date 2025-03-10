@@ -229,8 +229,8 @@ def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path,
 if __name__ == "__main__":
     # Define experiment parameters
     experiment_name = "cardio-detect"
-    bucket_name = "your-bucket-name"
-    key = "path/to/your/file.csv"
+    bucket_name = "projet-cardiodetect" 
+    key = "cardio_train.csv"
 
     param_grid = {
         "Random_Forest__max_depth": [2, 4, 6, 8, 10],
