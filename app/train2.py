@@ -157,20 +157,19 @@ def train_model(pipe, X_train, y_train, param_grid, cv=2, n_jobs=-1, verbose=3):
     return model
 
 # Log metrics and model to MLflow
-def log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path, registered_model_name):
+def log_metrics_and_model(model, X_train_raw, X_test, y_test, artifact_path, registered_model_name):
     """
     Log training and test metrics, and the model to MLflow.
 
     Args:
         model (GridSearchCV): The trained model.
-        X_train (pd.DataFrame): Training features.
-        y_train (pd.Series): Training target.
+        X_train_raw (pd.DataFrame): Raw training features (before preprocessing).
         X_test (pd.DataFrame): Test features.
         y_test (pd.Series): Test target.
         artifact_path (str): Path to store the model artifact.
         registered_model_name (str): Name to register the model under in MLflow.
     """
-    mlflow.log_metric("Train Score", model.score(X_train, y_train))
+    mlflow.log_metric("Train Score", model.score(X_train_raw, y_train_raw))
     mlflow.log_metric("Test Score", model.score(X_test, y_test))
 
     # Log the entire pipeline model (preprocessing + model) using custom PythonModel class
@@ -179,8 +178,8 @@ def log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path
     mlflow.pyfunc.log_model(
         artifact_path,  # Model name
         python_model=cardio_model,  # Model class instance
-        signature=infer_signature(X_train, model.best_estimator_.predict(X_train)),
-        input_example=X_train.iloc[:1]
+        signature=infer_signature(X_train_raw, model.best_estimator_.predict(X_train_raw)),
+        input_example=X_train_raw.iloc[:1]  # Use raw data for input example
     )
     print(f"Model logged to MLflow under artifact path: {artifact_path}")
 
@@ -202,7 +201,7 @@ def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path,
 
     # Load and preprocess data
     df = load_data_from_s3(bucket_name, key)
-    X_train, X_test, y_train, y_test = preprocess_data(df)
+    X_train_raw, X_test, y_train_raw, y_test = preprocess_data(df)
 
     # Create pipeline
     pipe = create_pipeline()
@@ -218,10 +217,10 @@ def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path,
 
     with mlflow.start_run(experiment_id=experiment.experiment_id):
         # Train model
-        model = train_model(pipe, X_train, y_train, param_grid)
+        model = train_model(pipe, X_train_raw, y_train_raw, param_grid)
 
         # Log metrics and model
-        log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path, registered_model_name)
+        log_metrics_and_model(model, X_train_raw, X_test, y_test, artifact_path, registered_model_name)
 
     # Print timing
     print(f"...Training Done! --- Total training time: {time.time() - start_time} seconds")
@@ -230,8 +229,8 @@ def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path,
 if __name__ == "__main__":
     # Define experiment parameters
     experiment_name = "cardio-detect"
-    bucket_name = "projet-cardiodetect" 
-    key = "cardio_train.csv"
+    bucket_name = "your-bucket-name"
+    key = "path/to/your/file.csv"
 
     param_grid = {
         "Random_Forest__max_depth": [2, 4, 6, 8, 10],
