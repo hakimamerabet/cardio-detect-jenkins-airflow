@@ -253,7 +253,7 @@ if __name__ == "__main__":
         "Random_Forest__max_depth": [2, 4, 6, 8, 10],
         "Random_Forest__min_samples_leaf": [1, 2, 5],
         "Random_Forest__min_samples_split": [2, 4, 8],
-        "Random_Forest__n_estimators": [10, 20, 40, 60, 80, 100],
+        "Random_Forest__n_estimators": [10, 20, 40, 60, 80, 100],  # Corrected typo
     }
     artifact_path = "modeling_cardiodetect"
     registered_model_name = "random_forest"
