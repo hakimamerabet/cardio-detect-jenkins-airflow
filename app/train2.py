@@ -8,6 +8,26 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from mlflow.models.signature import infer_signature
+import mlflow.pyfunc
+from typing import Any
+
+# Define a custom PythonModel class to wrap the sklearn pipeline
+class CardioDetectionModel(mlflow.pyfunc.PythonModel):
+    def __init__(self, pipeline):
+        self.pipeline = pipeline
+
+    def predict(self, context: Any, model_input: pd.DataFrame) -> pd.Series:
+        """
+        Predict method to make predictions using the pipeline.
+
+        Parameters:
+        - context: Information about the prediction context.
+        - model_input: The input data in DataFrame format.
+
+        Returns:
+        - The predicted values as a pandas Series.
+        """
+        return self.pipeline.predict(model_input)
 
 # Load data
 def load_data(url):
@@ -114,19 +134,14 @@ def log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path
     mlflow.log_metric("Train Score", model.score(X_train, y_train))
     mlflow.log_metric("Test Score", model.score(X_test, y_test))
 
-    # Log the preprocessing pipeline separately
-    preprocessor = model.best_estimator_.named_steps["Preprocessing"]
-    mlflow.sklearn.log_model(
-        sk_model=preprocessor,
-        artifact_path=f"{artifact_path}/preprocessor",
-        registered_model_name=f"{registered_model_name}_preprocessor"
-    )
+    # Log the entire pipeline model (preprocessing + model) using custom PythonModel class
+    cardio_model = CardioDetectionModel(model.best_estimator_)
 
-    # Log the full model pipeline
-    mlflow.sklearn.log_model(
-        sk_model=model,
-        artifact_path=artifact_path,
-        registered_model_name=registered_model_name
+    mlflow.pyfunc.log_model(
+        artifact_path,  # Model name
+        python_model=cardio_model,  # Model class instance
+        signature=infer_signature(X_train, model.best_estimator_.predict(X_train)),
+        input_example=X_train.iloc[:1]
     )
 
 # Main function to execute the workflow
