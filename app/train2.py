@@ -2,6 +2,8 @@ import pandas as pd
 import numpy as np
 import mlflow
 import time
+import boto3
+from io import StringIO
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.ensemble import RandomForestClassifier
@@ -29,18 +31,23 @@ class CardioDetectionModel(mlflow.pyfunc.PythonModel):
         """
         return self.pipeline.predict(model_input)
 
-# Load data
-def load_data(url):
+# Load data from S3
+def load_data_from_s3(bucket_name, file_key):
     """
-    Load dataset from the given URL.
+    Load dataset from the given S3 bucket and file key.
 
     Args:
-        url (str): URL to the CSV file.
+        bucket_name (str): Name of the S3 bucket.
+        file_key (str): Key of the file in the S3 bucket.
 
     Returns:
         pd.DataFrame: Loaded dataset.
     """
-    return pd.read_csv(url)
+    print(f"Loading data from S3 bucket: {bucket_name}, file key: {file_key}")
+    s3 = boto3.client("s3")
+    response = s3.get_object(Bucket=bucket_name, Key=file_key)
+    csv_content = response["Body"].read().decode("utf-8")
+    return pd.read_csv(StringIO(csv_content))
 
 # Preprocess data
 def preprocess_data(df):
@@ -115,6 +122,7 @@ def train_model(pipe, X_train, y_train, param_grid, cv=2, n_jobs=-1, verbose=3):
     """
     model = GridSearchCV(pipe, param_grid, n_jobs=n_jobs, verbose=verbose, cv=cv, scoring="r2")
     model.fit(X_train, y_train)
+    print("Model training completed.")
     return model
 
 # Log metrics and model to MLflow
@@ -143,15 +151,17 @@ def log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path
         signature=infer_signature(X_train, model.best_estimator_.predict(X_train)),
         input_example=X_train.iloc[:1]
     )
+    print(f"Model logged to MLflow under artifact path: {artifact_path}")
 
 # Main function to execute the workflow
-def run_experiment(experiment_name, data_url, param_grid, artifact_path, registered_model_name):
+def run_experiment(experiment_name, bucket_name, file_key, param_grid, artifact_path, registered_model_name):
     """
     Run the entire ML experiment pipeline.
 
     Args:
         experiment_name (str): Name of the MLflow experiment.
-        data_url (str): URL to load the dataset.
+        bucket_name (str): Name of the S3 bucket.
+        file_key (str): Key of the file in the S3 bucket.
         param_grid (dict): The hyperparameter grid for GridSearchCV.
         artifact_path (str): Path to store the model artifact.
         registered_model_name (str): Name to register the model under in MLflow.
@@ -160,7 +170,7 @@ def run_experiment(experiment_name, data_url, param_grid, artifact_path, registe
     start_time = time.time()
 
     # Load and preprocess data
-    df = load_data(data_url)
+    df = load_data_from_s3(bucket_name, file_key)
     X_train, X_test, y_train, y_test = preprocess_data(df)
 
     # Create pipeline
@@ -189,7 +199,8 @@ def run_experiment(experiment_name, data_url, param_grid, artifact_path, registe
 if __name__ == "__main__":
     # Define experiment parameters
     experiment_name = "cardio-detect"
-    data_url = "https://projet-cardiodetect.s3.eu-west-3.amazonaws.com/cardio_train.csv"
+    bucket_name = "projet-cardiodetect"
+    file_key = "cardio_train.csv"
 
     param_grid = {
         "Random_Forest__max_depth": [2, 4, 6, 8, 10],
@@ -201,4 +212,4 @@ if __name__ == "__main__":
     registered_model_name = "random_forest"
 
     # Run the experiment
-    run_experiment(experiment_name, data_url, param_grid, artifact_path, registered_model_name)
+    run_experiment(experiment_name, bucket_name, file_key, param_grid, artifact_path, registered_model_name)
