@@ -32,72 +32,104 @@ class CardioDetectionModel(mlflow.pyfunc.PythonModel):
         return self.pipeline.predict(model_input)
 
 # Load data from S3
-def load_data_from_s3(bucket_name, file_key):
+def load_data_from_s3(bucket_name, key):
     """
-    Load dataset from the given S3 bucket and file key.
+    Load dataset from the given S3 bucket.
 
     Args:
-        bucket_name (str): Name of the S3 bucket.
-        file_key (str): Key of the file in the S3 bucket.
+        bucket_name (str): The name of the S3 bucket.
+        key (str): The S3 key (file path in the bucket).
 
     Returns:
         pd.DataFrame: Loaded dataset.
     """
-    print(f"Loading data from S3 bucket: {bucket_name}, file key: {file_key}")
-    s3 = boto3.client("s3")
-    response = s3.get_object(Bucket=bucket_name, Key=file_key)
-    csv_content = response["Body"].read().decode("utf-8")
-    return pd.read_csv(StringIO(csv_content))
+    s3_client = boto3.client('s3')
+
+    # Download the file from S3 into memory
+    obj = s3_client.get_object(Bucket=bucket_name, Key=key)
+    data = obj['Body'].read().decode('utf-8')
+
+    # Read the data into a pandas DataFrame
+    df = pd.read_csv(StringIO(data), sep=';')
+
+    return df
 
 # Preprocess data
 def preprocess_data(df):
     """
-    Split the dataframe into X (features) and y (target).
+    Perform data cleaning and preprocessing.
 
     Args:
         df (pd.DataFrame): Input dataframe.
 
     Returns:
-        tuple: Split data (X_train, X_test, y_train, y_test).
+        tuple: Preprocessed data (X_train, X_test, y_train, y_test).
     """
+    # Delete rows with missing values
+    df = df.dropna()
+
+    # Drop ID column
+    df = df.drop(columns=["id"])
+
+    # Drop duplicates
+    df = df.drop_duplicates()
+
+    # Transform height to meters
+    df['height'] = df['height'].apply(lambda x: x / 100)
+
+    # Remove heights and weights that fall below 2.5% or above 97.5% of a given range
+    df.drop(df[(df['height'] > df['height'].quantile(0.975)) | (df['height'] < df['height'].quantile(0.025))].index, inplace=True)
+    df.drop(df[(df['weight'] > df['weight'].quantile(0.975)) | (df['weight'] < df['weight'].quantile(0.025))].index, inplace=True)
+
+    # Remove negative numbers in blood pressure
+    df = df[(df['ap_hi'] >= 0) & (df['ap_lo'] >= 30)]
+
+    # Remove records where diastolic pressure is higher than systolic pressure
+    df = df[df['ap_lo'] < df['ap_hi']]
+
+    # Calculate BMI
+    df['bmi'] = round(df['weight'] / (df['height'] ** 2), 2)
+
+    # Drop weight and height columns
+    df = df.drop(columns=['height', 'weight'])
+
+    # Convert age to years if needed
+    if df["age"].mean() > 100:
+        df["age"] = (df["age"] / 365).round()
+
+    # Modify gender: 1 -> 0, 2 -> 1
+    df["gender"] = df["gender"].replace({1: 0, 2: 1})
+
+    # Split the dataframe into X (features) and y (target)
     X = df.drop(columns=["cardio"])
     y = df["cardio"]
+
     return train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-# Create the preprocessing pipeline
-def create_preprocessing_pipeline():
-    # Categorial variables pipeline
+# Create the pipeline
+def create_pipeline():
+    # Preprocessing
+    # Categorical variables pipeline
     categorical_features = ['gluc', 'cholesterol']
     categorical_transformer = Pipeline(
-        steps=[
-        ('encoder', OneHotEncoder(drop='first')) # on encode les catégories sous forme de colonnes comportant des 0 et des 1
-    ])
+        steps=[('encoder', OneHotEncoder(drop='first'))]  # OneHotEncoder for categorical features
+    )
 
     # Quantitative variables pipeline
     numeric_features = ['age', 'ap_hi', 'ap_lo', 'bmi']
     numeric_transformer = Pipeline(
-        steps=[
-        ('scaler', StandardScaler()) # pour normaliser les variables
-    ])
+        steps=[('scaler', StandardScaler())]  # StandardScaler for numeric features
+    )
 
     # Pipelines combination
     preprocessor = ColumnTransformer(
         transformers=[
             ('num', numeric_transformer, numeric_features),
             ('cat', categorical_transformer, categorical_features)
-    ])
+        ]
+    )
 
-    return preprocessor
-
-# Create the full pipeline
-def create_pipeline():
-    """
-    Create a machine learning pipeline with StandardScaler and RandomForestRegressor.
-
-    Returns:
-        Pipeline: A scikit-learn pipeline object.
-    """
-    preprocessor = create_preprocessing_pipeline()
+    # Machine learning pipeline with RandomForestClassifier
     return Pipeline(steps=[
         ("Preprocessing", preprocessor),
         ("Random_Forest", RandomForestClassifier())
@@ -122,7 +154,6 @@ def train_model(pipe, X_train, y_train, param_grid, cv=2, n_jobs=-1, verbose=3):
     """
     model = GridSearchCV(pipe, param_grid, n_jobs=n_jobs, verbose=verbose, cv=cv, scoring="r2")
     model.fit(X_train, y_train)
-    print("Model training completed.")
     return model
 
 # Log metrics and model to MLflow
@@ -154,14 +185,14 @@ def log_metrics_and_model(model, X_train, y_train, X_test, y_test, artifact_path
     print(f"Model logged to MLflow under artifact path: {artifact_path}")
 
 # Main function to execute the workflow
-def run_experiment(experiment_name, bucket_name, file_key, param_grid, artifact_path, registered_model_name):
+def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path, registered_model_name):
     """
     Run the entire ML experiment pipeline.
 
     Args:
         experiment_name (str): Name of the MLflow experiment.
-        bucket_name (str): Name of the S3 bucket.
-        file_key (str): Key of the file in the S3 bucket.
+        bucket_name (str): S3 bucket name where the dataset is stored.
+        key (str): S3 key (file path in the bucket).
         param_grid (dict): The hyperparameter grid for GridSearchCV.
         artifact_path (str): Path to store the model artifact.
         registered_model_name (str): Name to register the model under in MLflow.
@@ -170,7 +201,7 @@ def run_experiment(experiment_name, bucket_name, file_key, param_grid, artifact_
     start_time = time.time()
 
     # Load and preprocess data
-    df = load_data_from_s3(bucket_name, file_key)
+    df = load_data_from_s3(bucket_name, key)
     X_train, X_test, y_train, y_test = preprocess_data(df)
 
     # Create pipeline
@@ -199,8 +230,8 @@ def run_experiment(experiment_name, bucket_name, file_key, param_grid, artifact_
 if __name__ == "__main__":
     # Define experiment parameters
     experiment_name = "cardio-detect"
-    bucket_name = "projet-cardiodetect"
-    file_key = "cardio_train.csv"
+    bucket_name = "projet-cardiodetect" 
+    key = "cardio_train.csv"
 
     param_grid = {
         "Random_Forest__max_depth": [2, 4, 6, 8, 10],
@@ -212,4 +243,4 @@ if __name__ == "__main__":
     registered_model_name = "random_forest"
 
     # Run the experiment
-    run_experiment(experiment_name, bucket_name, file_key, param_grid, artifact_path, registered_model_name)
+    run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path, registered_model_name)
