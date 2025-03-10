@@ -12,4 +12,4 @@ RUN curl -fsSL https://get.deta.dev/cli.sh | sh
 COPY . .
 RUN pip install -r requirements.txt
 
-CMD ["python", "app/train.py"]
+CMD ["python", "app/train2.py"]
