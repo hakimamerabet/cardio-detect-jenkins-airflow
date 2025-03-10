@@ -164,7 +164,7 @@ def train_model(pipe, X_train, y_train, param_grid, cv=2, n_jobs=-1, verbose=3):
     return model
 
 # Log metrics and model to MLflow
-def log_metrics_and_model(model, preprocessor, X_train, X_test, y_test, artifact_path, registered_model_name):
+def log_metrics_and_model(model, preprocessor, X_train, y_train, X_test, y_test, artifact_path, registered_model_name):
     """
     Log training and test metrics, and the model to MLflow.
 
@@ -172,6 +172,7 @@ def log_metrics_and_model(model, preprocessor, X_train, X_test, y_test, artifact
         model (GridSearchCV): The trained model.
         preprocessor (Pipeline): The preprocessing pipeline.
         X_train (pd.DataFrame): Training features.
+        y_train (pd.Series): Training target.
         X_test (pd.DataFrame): Test features.
         y_test (pd.Series): Test target.
         artifact_path (str): Path to store the model artifact.
@@ -236,7 +237,7 @@ def run_experiment(experiment_name, bucket_name, key, param_grid, artifact_path,
         model = train_model(pipe, X_train, y_train, param_grid)
 
         # Log metrics and model
-        log_metrics_and_model(model, preprocessor, X_train, X_test, y_test, artifact_path, registered_model_name)
+        log_metrics_and_model(model, preprocessor, X_train, y_train, X_test, y_test, artifact_path, registered_model_name)
 
     # Print timing
     print(f"...Training Done! --- Total training time: {time.time() - start_time} seconds")
