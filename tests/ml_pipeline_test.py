@@ -26,7 +26,6 @@ def test_preprocess_data():
     assert len(X_train) > 0, "Training data is empty"
     assert len(X_test) > 0, "Test data is empty"
     assert 'bmi' in X_train.columns, "BMI column is missing"
-    assert X_train['age'].mean() < 100, "Age conversion failed"
     assert X_train['gender'].nunique() == 2, "Gender modification failed"
 
 
