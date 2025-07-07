@@ -3,7 +3,7 @@ from unittest import mock
 from app.train import load_data, preprocess_data, create_pipeline, train_model
 
 # S3 bucker_name & key to be use for all functions
-bucket_name = "projet-cardiodetect"
+bucket_name = "hk-cardio-detect-project"
 key = "cardio_train.csv"
 
 # Test data loading
