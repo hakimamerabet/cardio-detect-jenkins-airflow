@@ -11,7 +11,6 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    // Build Docker image using Jenkins Docker pipeline syntax
                     docker.build('ml-pipeline-image')
                 }
             }
@@ -27,13 +26,17 @@ pipeline {
                     string(credentialsId: 'artifact-root', variable: 'ARTIFACT_ROOT')
                 ]) {
                     script {
-                        // Run tests inside Docker using the Jenkins docker.image().inside block
-                        docker.image('ml-pipeline-image').inside('-e MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI ' +
-                                                               '-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID ' +
-                                                               '-e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY ' +
-                                                               '-e BACKEND_STORE_URI=$BACKEND_STORE_URI ' +
-                                                               '-e ARTIFACT_ROOT=$ARTIFACT_ROOT') {
-                            // Execute pytest without using sh
+                        // Convert Windows path to Docker-compatible format
+                        def workspacePath = pwd().replaceAll('\\\\', '/').replaceAll('C:', '/c')
+
+                        docker.image('ml-pipeline-image').inside(
+                            "-v ${workspacePath}:/workspace " +
+                            "-e MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI " +
+                            "-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID " +
+                            "-e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY " +
+                            "-e BACKEND_STORE_URI=$BACKEND_STORE_URI " +
+                            "-e ARTIFACT_ROOT=$ARTIFACT_ROOT"
+                        ) {
                             bat 'pytest --maxfail=1 --disable-warnings'
                         }
                     }
@@ -45,7 +48,6 @@ pipeline {
     post {
         always {
             echo 'Cleaning up workspace and Docker images...'
-            // Docker cleanup can be done using the Docker pipeline syntax or PowerShell/bat
             bat 'docker system prune -f'
         }
         success {
