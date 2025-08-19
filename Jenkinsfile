@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    environment {
+        IMAGE_NAME = 'ml-pipeline-image'
+        WORKSPACE_DIR = '/c/Users/hakima/.jenkins/workspace/ML-tests'
+    }
+
     stages {
         stage('Checkout') {
             steps {
@@ -11,7 +16,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    docker.build('ml-pipeline-image')
+                    docker.build("${IMAGE_NAME}")
                 }
             }
         }
@@ -28,15 +33,15 @@ pipeline {
                     script {
                         bat """
                         docker run --rm ^
-                          -v /c/Users/hakima/.jenkins/workspace/ML-tests:/workspace ^
+                          -v ${WORKSPACE_DIR}:/workspace ^
                           -w /workspace ^
-                          -e MLFLOW_TRACKING_URI=${env.MLFLOW_TRACKING_URI} ^
-                          -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} ^
-                          -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} ^
-                          -e BACKEND_STORE_URI=${env.BACKEND_STORE_URI} ^
-                          -e ARTIFACT_ROOT=${env.ARTIFACT_ROOT} ^
-                          ml-pipeline-image ^
-                          cmd /c "pytest --maxfail=1 --disable-warnings"
+                          -e MLFLOW_TRACKING_URI ^
+                          -e AWS_ACCESS_KEY_ID ^
+                          -e AWS_SECRET_ACCESS_KEY ^
+                          -e BACKEND_STORE_URI ^
+                          -e ARTIFACT_ROOT ^
+                          ${IMAGE_NAME} ^
+                          sh -c "pytest --maxfail=1 --disable-warnings"
                         """
                     }
                 }
@@ -50,10 +55,10 @@ pipeline {
             bat 'docker system prune -f'
         }
         success {
-            echo 'Pipeline completed successfully!'
+            echo '✅ Pipeline completed successfully!'
         }
         failure {
-            echo 'Pipeline failed. Check logs for errors.'
+            echo '❌ Pipeline failed. Check logs for errors.'
         }
     }
 }
