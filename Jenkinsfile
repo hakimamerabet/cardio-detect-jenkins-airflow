@@ -26,20 +26,18 @@ pipeline {
                     string(credentialsId: 'artifact-root', variable: 'ARTIFACT_ROOT')
                 ]) {
                     script {
-                        // Convert Windows-style WORKSPACE path to Docker-compatible format
-                        def dockerPath = env.WORKSPACE.replaceAll('\\\\', '/').replaceAll('C:', '/c')
-
-                        docker.image('ml-pipeline-image').inside(
-                            "-v ${dockerPath}:/workspace " +
-                            "-w /workspace " +
-                            "-e MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI " +
-                            "-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID " +
-                            "-e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY " +
-                            "-e BACKEND_STORE_URI=$BACKEND_STORE_URI " +
-                            "-e ARTIFACT_ROOT=$ARTIFACT_ROOT"
-                        ) {
-                            bat 'pytest --maxfail=1 --disable-warnings'
-                        }
+                        bat """
+                        docker run --rm ^
+                          -v /c/Users/hakima/.jenkins/workspace/ML-tests:/workspace ^
+                          -w /workspace ^
+                          -e MLFLOW_TRACKING_URI=${env.MLFLOW_TRACKING_URI} ^
+                          -e AWS_ACCESS_KEY_ID=${env.AWS_ACCESS_KEY_ID} ^
+                          -e AWS_SECRET_ACCESS_KEY=${env.AWS_SECRET_ACCESS_KEY} ^
+                          -e BACKEND_STORE_URI=${env.BACKEND_STORE_URI} ^
+                          -e ARTIFACT_ROOT=${env.ARTIFACT_ROOT} ^
+                          ml-pipeline-image ^
+                          cmd /c "pytest --maxfail=1 --disable-warnings"
+                        """
                     }
                 }
             }
