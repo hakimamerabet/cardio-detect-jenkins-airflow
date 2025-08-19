@@ -26,11 +26,12 @@ pipeline {
                     string(credentialsId: 'artifact-root', variable: 'ARTIFACT_ROOT')
                 ]) {
                     script {
-                        // Convert Windows path to Docker-compatible format
-                        def workspacePath = pwd().replaceAll('\\\\', '/').replaceAll('C:', '/c')
+                        // Convert Windows-style WORKSPACE path to Docker-compatible format
+                        def dockerPath = env.WORKSPACE.replaceAll('\\\\', '/').replaceAll('C:', '/c')
 
                         docker.image('ml-pipeline-image').inside(
-                            "-v ${workspacePath}:/workspace " +
+                            "-v ${dockerPath}:/workspace " +
+                            "-w /workspace " +
                             "-e MLFLOW_TRACKING_URI=$MLFLOW_TRACKING_URI " +
                             "-e AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID " +
                             "-e AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY " +
